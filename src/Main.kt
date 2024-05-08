@@ -1,5 +1,9 @@
 import java.io.File
+import java.util.*
+import kotlin.collections.ArrayList
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.system.exitProcess
 
 data class CalculationResult(
     val result: DoubleArray,
@@ -26,11 +30,118 @@ data class CalculationResult(
 
 const val MAX_ITERATIONS = 1000000
 
+fun isDiagonalPriority(a: Array<DoubleArray>, n: Int): Boolean {
+    var flag = true
+
+    for (i in 0..<n) {
+        var s = 0.0
+        for (j in 0..<n) {
+            s += abs(a[i][j])
+        }
+        s -= abs(a[i][i])
+        if (s > abs(a[i][i])) {
+            flag = false
+        }
+    }
+
+    return flag
+}
+
+//    пытаемся сделать диагональное преобладание
+fun doDiagonalPriority(n: Int, a: Array<DoubleArray>, b: DoubleArray): Array<DoubleArray> {
+    val options: MutableList<SortedSet<Int>> = ArrayList()
+    for (i in 0..<n) {
+        options.add(TreeSet())
+    }
+
+    var k = 0
+    for (i in 0..<n) {
+        var s = 0.0
+        for (j in 0..<n) {
+            s += abs(a[i][j])
+        }
+        for (j in 0..<n) {
+            if (abs(a[i][j]) >= (s - abs(a[i][j]))) {
+                val set = options[j]
+                set.add(i)
+            }
+            if (abs(a[i][j]) > (s - abs(a[i][j]))) {
+                k++
+            }
+        }
+    }
+
+    if (k == 0) {
+        throw RuntimeException("Невозможно преобразовать к диагональному виду ;(")
+    }
+    checkPotentialDiagonalPriority(options, n)
+
+    var maxLen = 20
+    while (maxLen > 2) {
+        var curMaxLen = 0
+        for (i in 0..<n) {
+            for (j in 0..<n) {
+                if (i != j && options[j].size == 1) {
+                    options[i].removeAll(options[j])
+                    curMaxLen = max(curMaxLen.toDouble(), options[i].size.toDouble()).toInt()
+                }
+            }
+        }
+        maxLen = curMaxLen
+    }
+
+    checkPotentialDiagonalPriority(options, n)
+
+    //        получаем необходимую последовательность строк
+    for (i in 0..<n) {
+        if (options[i].size == 2) {
+            options[i].remove(options[i].last())
+        }
+        for (j in i + 1..<n) {
+            options[j].removeAll(options[i])
+        }
+    }
+
+    checkPotentialDiagonalPriority(options, n)
+
+    val newArray = Array(n) { DoubleArray(n + 1) }
+
+    for (i in 0..<n) {
+        for (j in 0..<n) {
+            newArray[i][j] = a[options[i].first()][j]
+        }
+        newArray[i][n] = b[options[i].first()]
+    }
+
+    return newArray
+}
+
+private fun checkPotentialDiagonalPriority(options: List<SortedSet<Int>>, n: Int) {
+    for (i in 0..<n) {
+        if (options[i].isEmpty()) {
+            throw RuntimeException("Невозможно преобразовать к диагональному виду :(")
+        }
+    }
+}
+
 fun gaussSeidel(
     coefficients: Array<DoubleArray>,
     rhs: DoubleArray,
     tolerance: Double
 ): CalculationResult? {
+    try {
+        if (!isDiagonalPriority(coefficients, coefficients.size)) {
+            val newA = doDiagonalPriority(coefficients.size, coefficients, rhs)
+            for (i in coefficients.indices) {
+                System.arraycopy(newA[i], 0, coefficients[i], 0, coefficients.size)
+                rhs[i] = newA[i][coefficients.size]
+            }
+        }
+    } catch (e: RuntimeException) {
+        println(e.message)
+        exitProcess(1)
+    }
+
     val numberOfEquations = coefficients.size
     val result = DoubleArray(numberOfEquations)
     val maxIterations = MAX_ITERATIONS
